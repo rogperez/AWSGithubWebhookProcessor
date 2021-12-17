@@ -39,7 +39,7 @@ export class GithubWebhookProcessor extends cdk.Stack {
           passthroughBehavior: apigw.PassthroughBehavior.NEVER,
           credentialsRole: role,
           requestParameters: {
-            "integration.request.header.Content-Type": "'application/json'",
+            "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'",
           },
           requestTemplates: {
             "application/json": "Action=SendMessage&MessageBody=$input.body",
