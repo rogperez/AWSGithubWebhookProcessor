@@ -5,17 +5,12 @@ import * as apigw from "@aws-cdk/aws-apigateway";
 import { Aws } from "@aws-cdk/core";
 
 export interface GithubWebhookProcessorProps extends cdk.StackProps {
-  supportedWebhooks: string[];
+  supportedWebhooks?: string[];
 }
 
 export class GithubWebhookProcessor extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props?: GithubWebhookProcessorProps) {
+  constructor(scope: cdk.Construct, id: string, props: GithubWebhookProcessorProps) {
     super(scope, id, props);
-
-    /**
-     * Queue
-     */
-    const queue = new sqs.Queue(this, "Queue");
 
     /**
      * Role
@@ -23,7 +18,15 @@ export class GithubWebhookProcessor extends cdk.Stack {
     const role = new iam.Role(this, "QueueSendMessageRole", {
       assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
     });
-    queue.grantSendMessages(role);
+
+    [props.supportedWebhooks || []].forEach((s) => {
+      /**
+       * Queue
+       */
+      new sqs.Queue(this, "Queue", {
+        queueName: `GithubWehook-${s}-queue`,
+      }).grantSendMessages(role);
+    });
 
     /**
      * API
@@ -34,12 +37,13 @@ export class GithubWebhookProcessor extends cdk.Stack {
       new apigw.Integration({
         type: apigw.IntegrationType.AWS,
         integrationHttpMethod: "POST",
-        uri: `arn:${Aws.PARTITION}:apigateway:${Aws.REGION}:sqs:path/${Aws.ACCOUNT_ID}/${queue.queueName}`,
+        uri: `arn:${Aws.PARTITION}:apigateway:${Aws.REGION}:sqs:path/${Aws.ACCOUNT_ID}/GithubWehook-{github-event}-queue`,
         options: {
           passthroughBehavior: apigw.PassthroughBehavior.NEVER,
           credentialsRole: role,
           requestParameters: {
             "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'",
+            "github-event": "method.request.header.x-github-event",
           },
           requestTemplates: {
             "application/json": "Action=SendMessage&MessageBody=$input.body",
@@ -48,7 +52,7 @@ export class GithubWebhookProcessor extends cdk.Stack {
             {
               statusCode: "200",
               responseTemplates: {
-                "application/json": "success",
+                "application/json": "200: Success",
               },
             },
           ],
