@@ -19,13 +19,16 @@ export class GithubWebhookProcessor extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
     });
 
-    [props.supportedWebhooks || []].forEach((s) => {
+    (props.supportedWebhooks || []).forEach((event) => {
       /**
        * Queue
        */
-      new sqs.Queue(this, "Queue", {
-        queueName: `GithubWehook-${s}-queue`,
-      }).grantSendMessages(role);
+      const capitalizedQueue = event.charAt(0).toUpperCase() + event.slice(1);
+      const queue = new sqs.Queue(this, `Github${capitalizedQueue}Queue`, {
+        queueName: `Github-${event}-Queue`,
+      });
+
+      queue.grantSendMessages(role);
     });
 
     /**
@@ -37,13 +40,13 @@ export class GithubWebhookProcessor extends cdk.Stack {
       new apigw.Integration({
         type: apigw.IntegrationType.AWS,
         integrationHttpMethod: "POST",
-        uri: `arn:${Aws.PARTITION}:apigateway:${Aws.REGION}:sqs:path/${Aws.ACCOUNT_ID}/GithubWehook-{github-event}-queue`,
+        uri: `arn:${Aws.PARTITION}:apigateway:${Aws.REGION}:sqs:path/${Aws.ACCOUNT_ID}/Github-{github-event}-Queue`,
         options: {
           passthroughBehavior: apigw.PassthroughBehavior.NEVER,
           credentialsRole: role,
           requestParameters: {
             "integration.request.header.Content-Type": "'application/x-www-form-urlencoded'",
-            "github-event": "method.request.header.x-github-event",
+            "integration.request.path.github-event": "method.request.header.x-github-event",
           },
           requestTemplates: {
             "application/json": "Action=SendMessage&MessageBody=$input.body",
@@ -59,6 +62,9 @@ export class GithubWebhookProcessor extends cdk.Stack {
         },
       }),
       {
+        requestParameters: {
+          "method.request.header.x-github-event": false,
+        },
         methodResponses: [
           {
             statusCode: "200",
