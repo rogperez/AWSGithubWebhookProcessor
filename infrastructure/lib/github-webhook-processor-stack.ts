@@ -49,7 +49,15 @@ export class GithubWebhookProcessor extends cdk.Stack {
             "integration.request.path.github-event": "method.request.header.x-github-event",
           },
           requestTemplates: {
-            "application/json": "Action=SendMessage&MessageBody=$input.body",
+            "application/json":
+              "Action=SendMessage&MessageBody={\n" +
+              '  "data" : $input.body,\n' +
+              '  "headers": {\n' +
+              "    #foreach($param in $input.params().header.keySet())\n" +
+              '    "$param": "$util.escapeJavaScript($input.params().header.get($param))" #if($foreach.hasNext),#end\n' +
+              "    #end\n" +
+              "  }\n" +
+              "}",
           },
           integrationResponses: [
             {
